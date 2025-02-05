@@ -86,7 +86,10 @@ ENV GIT_MODIFIED=$GIT_MODIFIED
 
 # Builder
 COPY . .
-RUN ASMFLAGS="-march=haswell" CFLAGS="-march=haswell -fno-omit-frame-pointer" CXXFLAGS="-march=haswell -fno-omit-frame-pointer" \
+RUN --mount=type=cache,target=${CARGO_ROOT}/registry    \
+    --mount=type=cache,target=${CARGO_ROOT}/git         \
+    --mount=type=cache,target=/usr/src/monad-bft/target \
+    ASMFLAGS="-march=haswell" CFLAGS="-march=haswell -fno-omit-frame-pointer" CXXFLAGS="-march=haswell -fno-omit-frame-pointer" \
     RUSTFLAGS="-C force-frame-pointers=yes" CC=gcc-15 CXX=g++-15 cargo build --release --bin monad-node --bin monad-keystore --bin monad-debug-node --example ledger-tail --example wal2json --example triedb-bench --example sign-name-record && \
     mv target/release/monad-node monad-node && \
     mv target/release/monad-keystore keystore && \
@@ -95,8 +98,8 @@ RUN ASMFLAGS="-march=haswell" CFLAGS="-march=haswell -fno-omit-frame-pointer" CX
     mv target/release/examples/wal2json wal2json && \
     mv target/release/examples/triedb-bench triedb-bench && \
     mv target/release/examples/sign-name-record sign-name-record && \
-    cp `ls -Lt $(find target/release | grep -e "libtriedb_driver.so")` . && \
-    ldd $(ls -Lt $(find target/release | grep -e "libtriedb_driver.so")) | docker/filter-dependent-shared-objects.py | xargs -I {} cp {} .
+    cp `ls -Lt $(find target/release | grep -e "libtriedb_driver.so") | awk -F/ '!seen[$NF]++'` . && \
+    ldd $(ls -Lt $(find target/release | grep -e "libtriedb_driver.so") | awk -F/ '!seen[$NF]++') | docker/filter-dependent-shared-objects.py | xargs -I {} cp {} .
 
 # Runner
 FROM base AS runner
