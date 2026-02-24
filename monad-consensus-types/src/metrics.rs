@@ -170,7 +170,9 @@ metrics!(
             peer_headers_request_failed,
             peer_payload_request,
             peer_payload_request_successful,
-            peer_payload_request_failed
+            peer_payload_request_failed,
+            peer_headers_ledger_fetch,
+            peer_payload_ledger_fetch
         ]
     )
 );

@@ -1,0 +1,21 @@
+[package]
+name = "monad-blocksync-flood"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "monad-blocksync-flood"
+path = "src/main.rs"
+
+[dependencies]
+monad-blocksync = { workspace = true }
+monad-consensus-types = { workspace = true }
+monad-crypto = { workspace = true }
+monad-secp = { workspace = true }
+monad-types = { workspace = true }
+
+alloy-rlp = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+rand = { workspace = true }
+secp256k1 = { workspace = true, features = ["rand"] }

@@ -53,7 +53,7 @@ const BLOCKSYNC_MAX_PAYLOAD_REQUESTS: usize = 10;
 // TODO configurable
 // caps total outstanding peer request table entries across headers + payload maps.
 // validator senders bypass this cap.
-const BLOCKSYNC_MAX_PEER_REQUEST_TABLE_ENTRIES: usize = 4096;
+const BLOCKSYNC_MAX_PEER_REQUEST_TABLE_ENTRIES: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum BlockSyncSelfRequester {
@@ -454,6 +454,11 @@ where
                         .entry(ledger_fetch_range)
                         .or_default();
                     entry.insert(sender, cached_blocks);
+                    self.metrics.blocksync_events.peer_headers_ledger_fetch += 1;
+                    warn!(
+                        table_len = self.block_sync.peer_request_table_len(),
+                        "blocksync: peer request triggered ledger fetch for headers"
+                    );
                     cmds.push(BlockSyncCommand::FetchHeaders(ledger_fetch_range));
                 }
             }
@@ -494,6 +499,11 @@ where
                     .entry(payload_id)
                     .or_default();
                 entry.insert(sender);
+                self.metrics.blocksync_events.peer_payload_ledger_fetch += 1;
+                warn!(
+                    table_len = self.block_sync.peer_request_table_len(),
+                    "blocksync: peer request triggered ledger fetch for payload"
+                );
                 cmds.push(BlockSyncCommand::FetchPayload(payload_id));
             }
         }
@@ -1021,6 +1031,11 @@ where
                     .headers_requests
                     .remove(&block_range)
                     .unwrap_or_default();
+                warn!(
+                    table_len = self.block_sync.peer_request_table_len(),
+                    removed_requesters = requesters.len(),
+                    "blocksync: ledger response cleared peer request table entry for headers"
+                );
                 for (requester, cached_blocks) in requesters {
                     // extend with cached blocks respond with the requested block range
                     let requested_block_range = BlockRange {
@@ -1079,6 +1094,11 @@ where
                     .payload_requests
                     .remove(&payload_id)
                     .unwrap_or_default();
+                warn!(
+                    table_len = self.block_sync.peer_request_table_len(),
+                    removed_requesters = requesters.len(),
+                    "blocksync: ledger response cleared peer request table entry for payload"
+                );
                 for requester in requesters {
                     cmds.push(BlockSyncCommand::SendResponse {
                         to: requester,

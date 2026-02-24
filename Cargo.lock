@@ -4962,6 +4962,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "monad-blocksync-flood"
+version = "0.1.0"
+dependencies = [
+ "alloy-rlp",
+ "bytes",
+ "clap",
+ "monad-blocksync",
+ "monad-consensus-types",
+ "monad-crypto",
+ "monad-secp",
+ "monad-types",
+ "rand 0.8.5",
+ "secp256k1",
+]
+
+[[package]]
 name = "monad-blocktree"
 version = "0.1.0"
 dependencies = [
