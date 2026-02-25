@@ -35,12 +35,12 @@ use monad_executor_glue::{Message, RouterCommand};
 use monad_peer_discovery::mock::NopDiscovery;
 use monad_raptorcast::{
     create_dataplane_for_tests, new_defaulted_raptorcast_for_tests,
-    packet::build_messages,
+    packet::{build_messages, MAX_REDUNDANCY},
     raptorcast_secondary::{
         group_message::FullNodesGroupMessage, SecondaryOutboundMessage,
         SecondaryRaptorCastModeConfig,
     },
-    udp::{GroupId, MAX_REDUNDANCY},
+    udp::GroupId,
     util::{BuildTarget, Redundancy, SecondaryGroup, SecondaryGroupAssignment},
     DataplaneHandles, RaptorCast, RaptorCastEvent,
 };

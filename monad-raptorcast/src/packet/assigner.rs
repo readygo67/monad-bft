@@ -21,7 +21,7 @@ use monad_types::{NodeId, Stake};
 use monad_validator::validator_set::{ValidatorSet, ValidatorSetType};
 use rand::{rngs::StdRng, seq::SliceRandom as _, SeedableRng as _};
 
-use super::{BuildError, Chunk, PacketLayout, Result};
+use super::{BuildError, Chunk, Result};
 use crate::util::Recipient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,8 +268,8 @@ impl<'a, PT: PubKey> ChunkAssignment<'a, PT> {
         output
     }
 
-    pub fn generate(&self, layout: PacketLayout) -> Vec<Chunk<PT>> {
-        let mut buffer = BytesMut::zeroed(self.total_chunks * layout.segment_len());
+    pub fn generate(&self, segment_len: usize) -> Vec<Chunk<PT>> {
+        let mut buffer = BytesMut::zeroed(self.total_chunks * segment_len);
         let mut all_chunks = Vec::with_capacity(self.total_chunks);
 
         for slice in &self.assignments {
@@ -278,7 +278,7 @@ impl<'a, PT: PubKey> ChunkAssignment<'a, PT> {
                 &mut buffer,
                 slice.recipient,
                 slice.chunk_id_range.clone(),
-                layout.segment_len(),
+                segment_len,
             );
         }
 
@@ -453,7 +453,16 @@ pub(crate) struct StakeBasedWithRC<PT: PubKey> {
 }
 
 impl<PT: PubKey> StakeBasedWithRC<PT> {
-    pub fn seed_from_app_message_hash(app_message_hash: &[u8; 20]) -> [u8; 32] {
+    pub fn derive_seed_deterministic(
+        app_message_hash: &[u8; 20],
+        round: monad_types::Round,
+    ) -> [u8; 32] {
+        let mut padded_seed = [0u8; 32];
+        padded_seed[..20].copy_from_slice(app_message_hash);
+        padded_seed[20..28].copy_from_slice(&round.0.to_le_bytes());
+        padded_seed
+    }
+    pub fn derive_seed_regular(app_message_hash: &[u8; 20]) -> [u8; 32] {
         let mut padded_seed = [0u8; 32];
         padded_seed[..20].copy_from_slice(app_message_hash);
         padded_seed
@@ -581,14 +590,14 @@ mod tests {
 
     use super::{ChunkAssignment, ChunkOrder, Partitioned, StakeBasedWithRC};
     use crate::{
-        packet::{assigner::Replicated, ChunkAssigner as _, PacketLayout},
+        packet::{assigner::Replicated, regular, ChunkAssigner as _},
         util::{Recipient, Redundancy},
     };
 
     const DEFAULT_SEGMENT_LEN: usize = 1400;
     const DEFAULT_MERKLE_TREE_DEPTH: u8 = 6;
-    const DEFAULT_LAYOUT: PacketLayout =
-        PacketLayout::new(DEFAULT_SEGMENT_LEN, DEFAULT_MERKLE_TREE_DEPTH);
+    const DEFAULT_LAYOUT: regular::PacketLayout =
+        regular::PacketLayout::new(DEFAULT_SEGMENT_LEN, DEFAULT_MERKLE_TREE_DEPTH);
     const DEFAULT_SYMBOL_LEN: usize = DEFAULT_LAYOUT.symbol_len();
 
     type ST = SecpSignature;

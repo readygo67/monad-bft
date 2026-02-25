@@ -101,11 +101,15 @@ impl<const N: usize> HexBytes<N> {
 
 pub type NodeIdHash = HexBytes<20>;
 pub type AppMessageHash = HexBytes<20>;
+pub type GlobalMerkleRoot = HexBytes<20>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BroadcastMode {
     Primary,
     Secondary,
+    // Each DeterministicPrimary message commits to a "round". The
+    // committed value is (message_id, signature).
+    DeterministicPrimary(Round),
     Unspecified,
 }
 
@@ -752,6 +756,10 @@ mod tests {
         assert!((u16::MAX as usize)
             .checked_mul(Redundancy::MAX_MULTIPLIER + 1)
             .is_none());
+
+        assert!(Redundancy::MAX
+            .scale(crate::message::MAX_MESSAGE_SIZE)
+            .is_some());
     }
 
     #[test]

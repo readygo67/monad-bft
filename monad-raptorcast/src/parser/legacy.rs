@@ -28,17 +28,17 @@ use monad_types::{Epoch, Round};
 
 use crate::{
     message::MAX_MESSAGE_SIZE,
-    packet::assembler::HEADER_LEN,
+    packet::regular::{self, PacketLayout},
     parser::signature_verifier,
     udp::{
-        GroupId, MessageValidationError, ValidatedMessage, MAX_MERKLE_TREE_DEPTH, MAX_REDUNDANCY,
-        MAX_VALIDATOR_SET_SIZE, MIN_MERKLE_TREE_DEPTH,
+        GroupId, MessageIdentifier, MessageValidationError, ValidatedMessage,
+        MAX_VALIDATOR_SET_SIZE,
     },
     util::{BroadcastMode, HexBytes},
     SIGNATURE_SIZE,
 };
 
-type SignatureCacheKey = [u8; HEADER_LEN + 20];
+type SignatureCacheKey = [u8; PacketLayout::HEADER_LEN + 20];
 pub type ChunkSignatureVerifier<ST> =
     signature_verifier::SignatureVerifier<ST, SignatureCacheKey, signing_domain::RaptorcastChunk>;
 
@@ -84,7 +84,7 @@ where
         }
     };
 
-    if !(MIN_MERKLE_TREE_DEPTH..=MAX_MERKLE_TREE_DEPTH).contains(&tree_depth) {
+    if !(regular::MIN_MERKLE_TREE_DEPTH..=regular::MAX_MERKLE_TREE_DEPTH).contains(&tree_depth) {
         return Err(MessageValidationError::InvalidTreeDepth);
     }
 
@@ -93,6 +93,7 @@ where
     let group_id = match broadcast_mode {
         BroadcastMode::Primary | BroadcastMode::Unspecified => GroupId::Primary(Epoch(group_id)),
         BroadcastMode::Secondary => GroupId::Secondary(Round(group_id)),
+        BroadcastMode::DeterministicPrimary(_) => GroupId::Primary(Epoch(group_id)),
     };
 
     let cursor_unix_ts_ms = split_off(8)?;
@@ -112,6 +113,7 @@ where
             .try_into()
             .expect("Hash is 20 bytes"),
     );
+    let message_id = MessageIdentifier::AppMessageHash(app_message_hash);
 
     let cursor_app_message_len = split_off(4)?;
     let app_message_len = u32::from_le_bytes(
@@ -169,6 +171,9 @@ where
             // set is available.
             valid_chunk_id_range_raptorcast(app_message_len, symbol_len, MAX_VALIDATOR_SET_SIZE)?
         }
+        BroadcastMode::DeterministicPrimary(_) => {
+            valid_chunk_id_range_raptorcast(app_message_len, symbol_len, MAX_VALIDATOR_SET_SIZE)?
+        }
     };
     if !chunk_id_range.contains(&(chunk_id as usize)) {
         return Err(MessageValidationError::InvalidChunkId);
@@ -177,8 +182,8 @@ where
     let leaf_hash = {
         let mut hasher = HasherType::new();
         hasher.update(
-            &message[HEADER_LEN + proof_size as usize..
-                // HEADER_LEN as usize
+            &message[PacketLayout::HEADER_LEN + proof_size as usize..
+                // PacketLayout::HEADER_LEN as usize
                 //     + proof_size as usize
                 //     + CHUNK_HEADER_LEN as usize
                 //     + payload_len as usize
@@ -189,10 +194,10 @@ where
     let root = merkle_proof
         .compute_root(&leaf_hash)
         .ok_or(MessageValidationError::InvalidMerkleProof)?;
-    let mut signed_over: SignatureCacheKey = [0_u8; HEADER_LEN + 20];
+    let mut signed_over: SignatureCacheKey = [0_u8; PacketLayout::HEADER_LEN + 20];
     // TODO can avoid this copy if necessary
-    signed_over[..HEADER_LEN].copy_from_slice(&message[..HEADER_LEN]);
-    signed_over[HEADER_LEN..].copy_from_slice(&root);
+    signed_over[..PacketLayout::HEADER_LEN].copy_from_slice(&message[..PacketLayout::HEADER_LEN]);
+    signed_over[PacketLayout::HEADER_LEN..].copy_from_slice(&root);
 
     let author = if let Some(author) = signature_verifier.load_cached(&signed_over) {
         author
@@ -212,7 +217,7 @@ where
         author,
         group_id,
         unix_ts_ms,
-        app_message_hash,
+        message_id,
         app_message_len: app_message_len as u32,
         broadcast_mode,
         recipient_hash,
@@ -250,7 +255,7 @@ fn valid_chunk_id_range_raptorcast(
     }
     let base_chunks = app_message_len.div_ceil(symbol_len);
     let rounding_chunks = num_validators;
-    let num_chunks = MAX_REDUNDANCY
+    let num_chunks = regular::MAX_REDUNDANCY
         .scale(base_chunks)
         .ok_or(MessageValidationError::TooLong)?
         + rounding_chunks;
@@ -265,7 +270,7 @@ fn valid_chunk_id_range(
         return Err(MessageValidationError::TooShort);
     }
     let base_chunks = app_message_len.div_ceil(symbol_len);
-    let num_chunks = MAX_REDUNDANCY
+    let num_chunks = regular::MAX_REDUNDANCY
         .scale(base_chunks)
         .ok_or(MessageValidationError::TooLong)?;
     Ok(0..num_chunks)

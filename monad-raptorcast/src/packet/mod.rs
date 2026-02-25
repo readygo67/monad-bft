@@ -13,9 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pub(crate) mod assembler;
 pub(crate) mod assigner;
 mod builder;
+mod chunk;
+pub(crate) mod deterministic;
+pub(crate) mod regular;
 
 use std::{collections::HashMap, net::SocketAddr};
 
@@ -24,15 +26,12 @@ use monad_crypto::certificate_signature::{
     CertificateSignaturePubKey, CertificateSignatureRecoverable, PubKey,
 };
 use monad_types::NodeId;
+pub use regular::{MAX_REDUNDANCY, MIN_CHUNK_LENGTH};
 
-pub(crate) use self::{
-    assembler::{Chunk, PacketLayout},
-    assigner::ChunkAssigner,
-    builder::MessageBuilder,
-};
+pub(crate) use self::{assigner::ChunkAssigner, builder::MessageBuilder, chunk::Chunk};
 use crate::{
     udp::GroupId,
-    util::{BuildTarget, Redundancy},
+    util::{BroadcastMode, BuildTarget, Redundancy},
 };
 
 #[derive(Debug)]
@@ -55,6 +54,13 @@ pub enum BuildError {
     ZeroTotalStake,
     // redundancy is too high
     RedundancyTooHigh,
+    // group id not supported with the broadcast mode
+    InvalidGroupId(GroupId),
+    // broadcast mode not supported
+    InvalidBroadcastMode(BroadcastMode),
+    // chunk ids are not contiguous starting from 0, as required by
+    // deterministic RC
+    NonContiguousChunkIds,
 }
 
 type Result<A, E = BuildError> = std::result::Result<A, E>;
