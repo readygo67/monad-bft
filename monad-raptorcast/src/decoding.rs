@@ -43,10 +43,24 @@ use crate::{
 };
 
 pub const DECODING_CACHE_METRIC_PREFIX: &str = "monad.raptorcast.decoding_cache";
-pub const METRIC_RECENTLY_DECODED_HIT: &str = "monad.raptorcast.decoding_cache.decoded_hit";
-pub const METRIC_PENDING_HIT: &str = "monad.raptorcast.decoding_cache.pending_hit";
-pub const METRIC_NEW_ENTRY: &str = "monad.raptorcast.decoding_cache.new_entry";
-pub const METRIC_DECODED: &str = "monad.raptorcast.decoding_cache.decoded";
+monad_executor::metric_consts! {
+    pub METRIC_RECENTLY_DECODED_HIT {
+        name: "monad.raptorcast.decoding_cache.decoded_hit",
+        help: "Hits on recently decoded messages",
+    }
+    pub METRIC_PENDING_HIT {
+        name: "monad.raptorcast.decoding_cache.pending_hit",
+        help: "Hits on pending messages in cache",
+    }
+    pub METRIC_NEW_ENTRY {
+        name: "monad.raptorcast.decoding_cache.new_entry",
+        help: "New entries added to decoding cache",
+    }
+    pub METRIC_DECODED {
+        name: "monad.raptorcast.decoding_cache.decoded",
+        help: "Messages successfully decoded",
+    }
+}
 
 pub(crate) const RECENTLY_DECODED_CACHE_SIZE: usize = 10000;
 
@@ -175,7 +189,7 @@ where
                 recently_decoded
                     .handle_message(message)
                     .map_err(TryDecodeError::InvalidSymbol)?;
-                self.metrics[METRIC_RECENTLY_DECODED_HIT] += 1;
+                self.metrics[&METRIC_RECENTLY_DECODED_HIT] += 1;
                 return Ok(TryDecodeStatus::RecentlyDecoded);
             }
 
@@ -184,7 +198,7 @@ where
                 decoder_state
                     .handle_message(message)
                     .map_err(TryDecodeError::InvalidSymbol)?;
-                cache_hit_metric = METRIC_PENDING_HIT;
+                cache_hit_metric = &METRIC_PENDING_HIT;
                 decoder_state
             }
 
@@ -197,10 +211,10 @@ where
                     self.insert_decoder_state(&cache_key, message, decoder_state, context)
                 else {
                     // the cache rejected the new entry
-                    self.metrics[METRIC_NEW_ENTRY] += 1;
+                    self.metrics[&METRIC_NEW_ENTRY] += 1;
                     return Ok(TryDecodeStatus::RejectedByCache);
                 };
-                cache_hit_metric = METRIC_NEW_ENTRY;
+                cache_hit_metric = &METRIC_NEW_ENTRY;
                 decoder_state
             }
         };
@@ -243,7 +257,7 @@ where
 
         self.recently_decoded
             .put(cache_key, RecentlyDecodedState::from(decoder_state));
-        self.metrics[METRIC_DECODED] += 1;
+        self.metrics[&METRIC_DECODED] += 1;
 
         Ok(TryDecodeStatus::Decoded {
             author: message.author,
@@ -497,37 +511,47 @@ impl<'a, PT: PubKey> DecodingContext<'a, PT> {
 }
 
 struct SoftQuotaCacheMetrics {
-    pub total_insertions: &'static str,
-    pub total_evictions_from_overquota_author: &'static str,
-    pub total_evictions_from_overquota_others: &'static str,
-    pub total_evictions_from_expiry: &'static str,
-    pub total_random_evictions: &'static str,
+    pub total_insertions: &'static monad_executor::MetricDef,
+    pub total_evictions_from_overquota_author: &'static monad_executor::MetricDef,
+    pub total_evictions_from_overquota_others: &'static monad_executor::MetricDef,
+    pub total_evictions_from_expiry: &'static monad_executor::MetricDef,
+    pub total_random_evictions: &'static monad_executor::MetricDef,
     metrics: ExecutorMetrics,
 }
 
 impl SoftQuotaCacheMetrics {
     pub fn new(prefix: &str, tier: &str) -> Self {
-        let full_name = |name: &str| -> &'static str {
-            // leaking the names is safe because the cache is expected
-            // to be constructed only once.
-            format!("{prefix}.{tier}.{name}").leak()
+        // Leaking is safe because the cache is expected to be constructed only once.
+        let full_def = |name: &str, help: &'static str| -> &'static monad_executor::MetricDef {
+            Box::leak(Box::new(monad_executor::MetricDef::new(
+                format!("{prefix}.{tier}.{name}").leak(),
+                help,
+            )))
         };
 
         Self {
-            total_insertions: full_name("total_insertions"),
-            total_evictions_from_overquota_author: full_name(
+            total_insertions: full_def("total_insertions", "Total cache insertions"),
+            total_evictions_from_overquota_author: full_def(
                 "total_evictions_from_overquota_author",
+                "Evictions due to per-author quota being exceeded",
             ),
-            total_evictions_from_overquota_others: full_name(
+            total_evictions_from_overquota_others: full_def(
                 "total_evictions_from_overquota_others",
+                "Evictions due to global quota for non-author entries",
             ),
-            total_evictions_from_expiry: full_name("total_evictions_from_expiry"),
-            total_random_evictions: full_name("total_random_evictions"),
+            total_evictions_from_expiry: full_def(
+                "total_evictions_from_expiry",
+                "Evictions due to message expiry",
+            ),
+            total_random_evictions: full_def(
+                "total_random_evictions",
+                "Random evictions to free space",
+            ),
             metrics: ExecutorMetrics::default(),
         }
     }
 
-    pub fn incr(&mut self, key: &'static str, value: usize) {
+    pub fn incr(&mut self, key: &'static monad_executor::MetricDef, value: usize) {
         self.metrics[key] += value as u64;
     }
 

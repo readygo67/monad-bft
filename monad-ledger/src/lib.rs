@@ -69,9 +69,20 @@ where
     phantom: PhantomData<ST>,
 }
 
-const GAUGE_EXECUTION_LEDGER_NUM_COMMITS: &str = "monad.execution_ledger.num_commits";
-const GAUGE_EXECUTION_LEDGER_NUM_TX_COMMITS: &str = "monad.execution_ledger.num_tx_commits";
-const GAUGE_EXECUTION_LEDGER_BLOCK_NUM: &str = "monad.execution_ledger.block_num";
+monad_executor::metric_consts! {
+    GAUGE_EXECUTION_LEDGER_NUM_COMMITS {
+        name: "monad.execution_ledger.num_commits",
+        help: "Blocks committed to the execution ledger",
+    }
+    GAUGE_EXECUTION_LEDGER_NUM_TX_COMMITS {
+        name: "monad.execution_ledger.num_tx_commits",
+        help: "Transactions committed to the execution ledger",
+    }
+    GAUGE_EXECUTION_LEDGER_BLOCK_NUM {
+        name: "monad.execution_ledger.block_num",
+        help: "Current block number in the execution ledger",
+    }
+}
 
 impl<ST, SCT> MonadBlockFileLedger<ST, SCT>
 where
@@ -276,14 +287,14 @@ where
                     self.bft_block_persist.update_voted_head(&block_id).unwrap();
                 }
                 LedgerCommand::LedgerCommit(OptimisticCommit::Finalized(block)) => {
-                    self.metrics[GAUGE_EXECUTION_LEDGER_NUM_COMMITS] += 1;
+                    self.metrics[&GAUGE_EXECUTION_LEDGER_NUM_COMMITS] += 1;
 
                     let block_id = block.get_id();
                     let num_tx = block.body().execution_body.transactions.len() as u64;
                     let block_num = block.get_seq_num().0;
                     info!(num_tx, block_num, "committed block");
-                    self.metrics[GAUGE_EXECUTION_LEDGER_NUM_TX_COMMITS] += num_tx;
-                    self.metrics[GAUGE_EXECUTION_LEDGER_BLOCK_NUM] = block_num;
+                    self.metrics[&GAUGE_EXECUTION_LEDGER_NUM_TX_COMMITS] += num_tx;
+                    self.metrics[&GAUGE_EXECUTION_LEDGER_BLOCK_NUM] = block_num;
 
                     self.last_commit = Some((block.get_seq_num(), block.get_block_round()));
 

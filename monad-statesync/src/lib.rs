@@ -42,16 +42,36 @@ mod ffi;
 mod ipc;
 mod outbound_requests;
 
-const GAUGE_STATESYNC_SYNCING: &str = "monad.statesync.syncing";
-const GAUGE_STATESYNC_PROGRESS_ESTIMATE: &str = "monad.statesync.progress_estimate";
-const GAUGE_STATESYNC_LAST_TARGET: &str = "monad.statesync.last_target";
-const GAUGE_STATESYNC_SERVER_PENDING_REQUESTS: &str = "monad.statesync.server_pending_requests";
-const GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_SUCCESS: &str =
-    "monad.statesync.server_num_syncdone_success";
-const GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_FAILED: &str =
-    "monad.statesync.server_num_syncdone_failed";
-const GAUGE_STATESYNC_SERVER_TOTAL_SERVICE_TIME_US: &str =
-    "monad.statesync.server_total_service_time_us";
+monad_executor::metric_consts! {
+    GAUGE_STATESYNC_SYNCING {
+        name: "monad.statesync.syncing",
+        help: "Whether state sync is active (1) or not (0)",
+    }
+    GAUGE_STATESYNC_PROGRESS_ESTIMATE {
+        name: "monad.statesync.progress_estimate",
+        help: "Estimated progress of state sync operation",
+    }
+    GAUGE_STATESYNC_LAST_TARGET {
+        name: "monad.statesync.last_target",
+        help: "Last target block number for state sync",
+    }
+    GAUGE_STATESYNC_SERVER_PENDING_REQUESTS {
+        name: "monad.statesync.server_pending_requests",
+        help: "Pending state sync server requests",
+    }
+    GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_SUCCESS {
+        name: "monad.statesync.server_num_syncdone_success",
+        help: "Successful sync completions",
+    }
+    GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_FAILED {
+        name: "monad.statesync.server_num_syncdone_failed",
+        help: "Failed sync completions",
+    }
+    GAUGE_STATESYNC_SERVER_TOTAL_SERVICE_TIME_US {
+        name: "monad.statesync.server_total_service_time_us",
+        help: "Total state sync service time in microseconds",
+    }
+}
 
 pub struct StateSync<ST, SCT>
 where
@@ -105,7 +125,7 @@ where
     }
 
     fn update_syncing_metrics(&mut self) {
-        self.metrics[GAUGE_STATESYNC_SYNCING] = match &self.mode {
+        self.metrics[&GAUGE_STATESYNC_SYNCING] = match &self.mode {
             StateSyncMode::Sync(_) => 1,
             StateSyncMode::Live(_) => 0,
         };
@@ -136,7 +156,7 @@ where
                             unreachable!("Live -> Sync is not a valid state transition")
                         }
                     };
-                    self.metrics[GAUGE_STATESYNC_LAST_TARGET] = header.0.number;
+                    self.metrics[&GAUGE_STATESYNC_LAST_TARGET] = header.0.number;
                     statesync.update_target(header.0);
                     if let Some(waker) = self.waker.take() {
                         waker.wake();
@@ -281,7 +301,7 @@ where
         match &mut this.mode {
             StateSyncMode::Sync(sync) => {
                 if let Some(progress) = sync.progress_estimate() {
-                    this.metrics[GAUGE_STATESYNC_PROGRESS_ESTIMATE] = progress.0;
+                    this.metrics[&GAUGE_STATESYNC_PROGRESS_ESTIMATE] = progress.0;
                 }
 
                 if let Poll::Ready(event) = sync.poll_next_unpin(cx) {
@@ -310,14 +330,14 @@ where
                 }
             }
             StateSyncMode::Live(execution_ipc) => {
-                this.metrics[GAUGE_STATESYNC_SERVER_PENDING_REQUESTS] =
+                this.metrics[&GAUGE_STATESYNC_SERVER_PENDING_REQUESTS] =
                     execution_ipc.pending_request_len() as u64
                         + execution_ipc.is_servicing_request() as u64;
-                this.metrics[GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_SUCCESS] =
+                this.metrics[&GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_SUCCESS] =
                     execution_ipc.num_syncdone_success() as u64;
-                this.metrics[GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_FAILED] =
+                this.metrics[&GAUGE_STATESYNC_SERVER_NUM_SYNCDONE_FAILED] =
                     execution_ipc.num_syncdone_failed() as u64;
-                this.metrics[GAUGE_STATESYNC_SERVER_TOTAL_SERVICE_TIME_US] =
+                this.metrics[&GAUGE_STATESYNC_SERVER_TOTAL_SERVICE_TIME_US] =
                     execution_ipc.total_service_time_us() as u64;
                 if let Poll::Ready(maybe_response) = execution_ipc.response_rx.poll_recv(cx) {
                     let (to, message, completion) = maybe_response.expect("did StateSyncIpc die?");

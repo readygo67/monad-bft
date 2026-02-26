@@ -67,10 +67,7 @@ use util::{
 };
 
 use crate::{
-    metrics::{
-        GAUGE_RAPTORCAST_TOTAL_DESERIALIZE_ERRORS, GAUGE_RAPTORCAST_TOTAL_MESSAGES_RECEIVED,
-        GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS,
-    },
+    metrics::{GAUGE_RAPTORCAST_TOTAL_MESSAGES_RECEIVED, GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS},
     packet::RetrofitResult as _,
     raptorcast_secondary::{
         group_message::FullNodesGroupMessage, SecondaryOutboundMessage,
@@ -996,11 +993,11 @@ where
 
                 match sock.poll_unpin(cx) {
                     Poll::Ready(Ok(msg)) => {
-                        this.metrics[GAUGE_RAPTORCAST_TOTAL_MESSAGES_RECEIVED] += 1;
+                        this.metrics[&GAUGE_RAPTORCAST_TOTAL_MESSAGES_RECEIVED] += 1;
                         msg
                     }
                     Poll::Ready(Err(e)) => {
-                        this.metrics[GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS] += 1;
+                        this.metrics[&GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS] += 1;
                         trace!(error=?e, "socket recv error");
                         continue;
                     }
@@ -1116,7 +1113,7 @@ where
                         }
                     },
                     Err(err) => {
-                        this.metrics[GAUGE_RAPTORCAST_TOTAL_DESERIALIZE_ERRORS] += 1;
+                        this.metrics[&GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS] += 1;
                         debug!(?from, ?err, "failed to deserialize message");
                     }
                 }
@@ -1155,7 +1152,7 @@ where
                 match InboundRouterMessage::<M, ST>::try_deserialize(&app_message_bytes) {
                     Ok(message) => message,
                     Err(err) => {
-                        this.metrics[GAUGE_RAPTORCAST_TOTAL_DESERIALIZE_ERRORS] += 1;
+                        this.metrics[&GAUGE_RAPTORCAST_TOTAL_RECV_ERRORS] += 1;
                         debug!(?err, ?src_addr, "failed to deserialize message");
                         this.dataplane_control.disconnect(src_addr);
                         continue;
